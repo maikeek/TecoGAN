@@ -44,27 +44,27 @@ if( runcase == 0 ): # download inference data, trained models#
         # download the trained model
         if(not os.path.exists("./model/")): os.mkdir("./model/")
         cmd1 = "curl.exe --output .\model\model.zip --url https://ge.in.tum.de/download/data/TecoGAN/model.zip &"
-        cmd1 += "powershell.exe -NoP -NonI -Command \"Expand-Archive './model/model.zip' 'model'\" & del .\model\model.zip"
+        cmd1 += "powershell.exe -NoP -NonI -Command \"Expand-Archive -Force './model/model.zip' 'model'\" & del .\model\model.zip"
         subprocess.call(cmd1, shell=True)
         
         # download some test data
         if(not os.path.exists("./LR/")): os.mkdir("./LR/")
         cmd2 = "curl.exe --output .\LR\\vid3.zip --url https://ge.in.tum.de/download/data/TecoGAN/vid3_LR.zip &"
-        cmd2 += "powershell.exe -NoP -NonI -Command \"Expand-Archive './LR/vid3.zip' 'LR'\" & del .\LR\\vid3.zip"
+        cmd2 += "powershell.exe -NoP -NonI -Command \"Expand-Archive -Force './LR/vid3.zip' 'LR'\" & del .\LR\\vid3.zip"
         subprocess.call(cmd2, shell=True)
         
         cmd2 = "curl.exe --output .\LR\\tos.zip --url https://ge.in.tum.de/download/data/TecoGAN/tos_LR.zip &"
-        cmd2 += "powershell.exe -NoP -NonI -Command \"Expand-Archive './LR/tos.zip' 'LR'\" & del .\LR\\tos.zip"
+        cmd2 += "powershell.exe -NoP -NonI -Command \"Expand-Archive -Force './LR/tos.zip' 'LR'\" & del .\LR\\tos.zip"
         subprocess.call(cmd2, shell=True)
         
         # download the ground-truth data
         if(not os.path.exists("./HR/")): os.mkdir("./HR/")
         cmd3 = "curl.exe --output .\HR\\vid4.zip --url https://ge.in.tum.de/download/data/TecoGAN/vid4_HR.zip &"
-        cmd3 += "powershell.exe -NoP -NonI -Command \"Expand-Archive '.\HR\\vid4.zip' 'HR'\" & del .\HR\\vid4.zip"
+        cmd3 += "powershell.exe -NoP -NonI -Command \"Expand-Archive -Force '.\HR\\vid4.zip' 'HR'\" & del .\HR\\vid4.zip"
         subprocess.call(cmd3, shell=True)
         
         cmd3 = "curl.exe --output .\HR\\tos.zip --url https://ge.in.tum.de/download/data/TecoGAN/tos_HR.zip &"
-        cmd3 += "powershell.exe -NoP -NonI -Command \"Expand-Archive '.\HR\\tos.zip' 'HR'\" & del .\HR\\tos.zip"
+        cmd3 += "powershell.exe -NoP -NonI -Command \"Expand-Archive -Force '.\HR\\tos.zip' 'HR'\" & del .\HR\\tos.zip"
         subprocess.call(cmd3, shell=True)
 
     elif platform.system() == 'Linux':
