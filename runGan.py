@@ -8,7 +8,7 @@ runcase == 3    training TecoGAN
 runcase == 4    training FRVSR
 runcase == ...  coming... data preparation and so on...
 '''
-import os, subprocess, sys, datetime, signal, shutil, platform
+import os, subprocess, sys, datetime, signal, shutil
 
 runcase = int(sys.argv[1])
 print ("Testing test case %d" % runcase)
@@ -97,24 +97,28 @@ if( runcase == 0 ): # download inference data, trained models#
 elif( runcase == 1 ): # inference a trained model
     
     dirstr = './results/' # the place to save the results
-    testpre = ['calendar'] # the test cases
-
+    #testpre = ['calendar'] # the test cases
+    #testpre = ['Sq01_010_rl_bg1', 'Sq02_010_rl_bg1','Sq01_010_rl_chr', 'Sq02_010_rl_chr','Sq01_010_rl_bg2'] # the test cases
+    testpre = ['Sq01_020_comp_lq']
+    
     if (not os.path.exists(dirstr)): os.mkdir(dirstr)
     
     # run these test cases one by one:
     for nn in range(len(testpre)):
         cmd1 = ["python", "main.py",
-            "--cudaID", "0",            # set the cudaID here to use only one GPU
+            "--cudaID", "3",            # set the cudaID here to use only one GPU
             "--output_dir",  dirstr,    # Set the place to put the results.
             "--summary_dir", os.path.join(dirstr, 'log/'), # Set the place to put the log. 
             "--mode","inference", 
-            "--input_dir_LR", os.path.join("./LR/", testpre[nn]),   # the LR directory
+            "--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/v004/test", testpre[nn]),   # the LR directory
+            #"--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/", "Test"),   # the LR directory
             #"--input_dir_HR", os.path.join("./HR/", testpre[nn]),  # the HR directory
             # one of (input_dir_HR,input_dir_LR) should be given
-            "--output_pre", testpre[nn], # the subfolder to save current scene, optional
+            "--output_pre", os.path.join("v004", testpre[nn]), # the subfolder to save current scene, optional
             "--num_resblock", "16",  # our model has 16 residual blocks, 
             # the pre-trained FRVSR and TecoGAN mini have 10 residual blocks
-            "--checkpoint", './model/TecoGAN',  # the path of the trained model,
+            #"--checkpoint", './model/TecoGAN_Dinomite_05_LRHR',  # the path of the trained model,
+            "--checkpoint", './ex_TecoGAN02-24-14/model-337447',
             "--output_ext", "png"               # png is more accurate, jpg is smaller
         ]
         mycall(cmd1).communicate()
@@ -154,7 +158,8 @@ elif( runcase == 3 ): # Train TecoGAN
     Use our pre-trained FRVSR model. If you want to train one, try runcase 4, and update this path by:
     FRVSRModel = "ex_FRVSRmm-dd-hh/model-500000"
     '''
-    FRVSRModel = "model/ourFRVSR" 
+    #FRVSRModel = "model/ourFRVSR"
+    FRVSRModel = "ex_FRVSR02-19-17/model-220000"
     if(not os.path.exists(FRVSRModel+".data-00000-of-00001")):
         # Download our pre-trained FRVSR model
         print("pre-trained FRVSR model not found, downloading")
@@ -162,7 +167,7 @@ elif( runcase == 3 ): # Train TecoGAN
         cmd0 += "unzip model/ofrvsr.zip -d model; rm model/ofrvsr.zip"
         subprocess.call(cmd0, shell=True)
     
-    TrainingDataPath = "/mnt/netdisk/video_data/" 
+    TrainingDataPath =  "/home/carullo/Data/TecoGAN/Dinomite/v004/training" #"/mnt/netdisk/video_data/" 
     
     '''Prepare Training Folder'''
     # path appendix, manually define it, or use the current datetime, now_str = "mm-dd-hh"
@@ -170,13 +175,13 @@ elif( runcase == 3 ): # Train TecoGAN
     train_dir = folder_check("ex_TecoGAN%s/"%now_str)
     # train TecoGAN, loss = l2 + VGG54 loss + A spatio-temporal Discriminator
     cmd1 = ["python", "main.py",
-        "--cudaID", "0", # set the cudaID here to use only one GPU
+        "--cudaID", "3", # set the cudaID here to use only one GPU
         "--output_dir", train_dir, # Set the place to save the models.
         "--summary_dir", os.path.join(train_dir,"log/"), # Set the place to save the log. 
         "--mode","train",
         "--batch_size", "4" , # small, because GPU memory is not big
         "--RNN_N", "10" , # train with a sequence of RNN_N frames, >6 is better, >10 is not necessary
-        "--movingFirstFrame", # a data augmentation
+        # "--movingFirstFrame", # a data augmentation
         "--random_crop",
         "--crop_size", "32",
         "--learning_rate", "0.00005",
@@ -208,11 +213,11 @@ elif( runcase == 3 ): # Train TecoGAN
         "--input_video_dir", TrainingDataPath, 
         "--input_video_pre", "scene",
         "--str_dir", "2000",
-        "--end_dir", "2250",
-        "--end_dir_val", "2290",
-        "--max_frm", "119",
+        "--end_dir", "2011",
+        "--end_dir_val", "2013",
+        "--max_frm", "116",
         # -- cpu memory for data loading --
-        "--queue_thread", "12",# Cpu threads for the data. >4 to speedup the training
+        "--queue_thread", "6",# Cpu threads for the data. >4 to speedup the training
         "--name_video_queue_capacity", "1024",
         "--video_queue_capacity", "1024",
     ]
@@ -233,8 +238,8 @@ elif( runcase == 3 ): # Train TecoGAN
     ]
     
     # the following can be used to train TecoGAN continuously
-    # old_model = "model/ex_TecoGANmm-dd-hh/model-xxxxxxx" 
-    # cmd1 += [ # Here we want to train continuously
+    #old_model = "ex_TecoGAN02-24-14/model-337447" 
+    #cmd1 += [ # Here we want to train continuously
     #     "--nopre_trained_model", # False
     #     "--checkpoint", old_model,
     # ]
@@ -253,8 +258,8 @@ elif( runcase == 3 ): # Train TecoGAN
     '''
     cmd1 += [ # here, the fading in is disabled 
         "--Dt_ratio_max", "1.0",
-        "--Dt_ratio_0", "1.0", 
-        "--Dt_ratio_add", "0.0", 
+        "--Dt_ratio_0", "0.0", 
+        "--Dt_ratio_add", "0.00025", 
     ]
     ''' Other Losses '''
     cmd1 += [
@@ -278,19 +283,18 @@ elif( runcase == 4 ): # Train FRVSR, loss = l2 warp + l2 content
     now_str = datetime.datetime.now().strftime("%m-%d-%H")
     train_dir = folder_check("ex_FRVSR%s/"%now_str)
     cmd1 = ["python", "main.py",
-        "--cudaID", "0", # set the cudaID here to use only one GPU
+        "--cudaID", "3", # set the cudaID here to use only one GPU
         "--output_dir", train_dir, # Set the place to save the models.
         "--summary_dir", os.path.join(train_dir,"log/"), # Set the place to save the log. 
         "--mode","train",
         "--batch_size", "4" , # small, because GPU memory is not big
         "--RNN_N", "10" , # train with a sequence of RNN_N frames, >6 is better, >10 is not necessary
-        "--movingFirstFrame", # a data augmentation
+        # "--movingFirstFrame", "0", # a data augmentation
         "--random_crop",
         "--crop_size", "32",
-        "--learning_rate", "0.00005",
-        # -- learning_rate step decay, here it is not used --
-        "--decay_step", "500000", 
-        "--decay_rate", "1.0", # 1.0 means no decay
+        "--learning_rate", "0.0001",
+        "--decay_step", "50000", 
+        "--decay_rate", "0.5", # 1.0 means no decay
         "--stair",
         "--beta", "0.9", # ADAM training parameter beta
         "--max_iter", "500000", # 500k is usually fine for FRVSR, GAN versions need more to be stable
@@ -301,19 +305,25 @@ elif( runcase == 4 ): # Train FRVSR, loss = l2 warp + l2 content
         "--nopingpang",
     ]
     '''Video Training data... Same as runcase 3...'''
-    TrainingDataPath = "/mnt/netdisk/video_data/"
+    TrainingDataPath = "/home/carullo/Data/TecoGAN/Dinomite/v004/training"  #"/home/carullo/Data/TecoGAN/Test/"
     cmd1 += [
         "--input_video_dir", TrainingDataPath, 
         "--input_video_pre", "scene",
         "--str_dir", "2000",
-        "--end_dir", "2250",
-        "--end_dir_val", "2290",
-        "--max_frm", "119",
+        "--end_dir", "2011",
+        "--end_dir_val", "2013",
+        "--max_frm", "116",
         # -- cpu memory for data loading --
-        "--queue_thread", "12",# Cpu threads for the data. >4 to speedup the training
+        "--queue_thread", "6",# Cpu threads for the data. >4 to speedup the training
         "--name_video_queue_capacity", "1024",
         "--video_queue_capacity", "1024",
     ]
+    
+    #FRVSRModel = "ex_FRVSR02-18-14/model-136200"
+    #cmd1 += [ # based on a pre-trained FRVSR model. Here we want to train a new adversarial training
+    #    "--pre_trained_model", # True
+    #    "--checkpoint", FRVSRModel,
+    #]
     
     pid = mycall(cmd1, block=True)
     try: # catch interruption for training
