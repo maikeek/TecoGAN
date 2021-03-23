@@ -520,7 +520,8 @@ def gif_summary(name, tensor, max_outputs, fps, collections=None, family=None):
 
 ### Numpy functions ##################################################################################
 def save_img(out_path, img):
-    img = np.clip(img*255.0, 0, 255).astype(np.uint8)
+    img = (img + 1) / 2
+    img = np.clip(img*65535.0, 0, 65535).astype(np.uint16)
     cv.imwrite(out_path, img[:,:,::-1])
     
     

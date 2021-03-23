@@ -30,11 +30,11 @@ def inference_data_loader(FLAGS):
     # Read in and preprocess the images
     def preprocess_test(name):
         im = cv.imread(name,3).astype(np.float32)[:,:,::-1]
-        
-        if downSP:
-            icol_blur = cv.GaussianBlur( im, (0,0), sigmaX = 1.5)
-            im = icol_blur[::4,::4,::]
-        im = im / 65535.0 #np.max(im)
+        #if downSP:
+        #    icol_blur = cv.GaussianBlur( im, (0,0), sigmaX = 1.5)
+        #    im = icol_blur[::4,::4,::]
+        im = im / 65535.0  #np.max(im)
+        im = (2 * im) - 1
         return im
 
     image_LR = [preprocess_test(_) for _ in image_list_LR]
@@ -217,7 +217,7 @@ def loadHR(FLAGS, tar_size):
             output_names_LR = output_LR
             
             data_list_HR_r = []# high res rgb, in range 0-1, shape any
-            data_list_LR_r = []# high res rgb, in range 0-1, shape any
+            data_list_LR_r = []# low res rgb, in range 0-1, shape any
                 
             if FLAGS.movingFirstFrame and FLAGS.mode == 'train': # our data augmentation, moving first frame to mimic camera motion
                 print('[Config] Move first frame randomly')
