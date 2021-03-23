@@ -34,7 +34,7 @@ def inference_data_loader(FLAGS):
         if downSP:
             icol_blur = cv.GaussianBlur( im, (0,0), sigmaX = 1.5)
             im = icol_blur[::4,::4,::]
-        im = im / 255.0 #np.max(im)
+        im = im / 65535.0 #np.max(im)
         return im
 
     image_LR = [preprocess_test(_) for _ in image_list_LR]
@@ -80,7 +80,7 @@ def loadHR_batch(FLAGS, tar_size):
             HR_data = []
             for frame_i in range(FLAGS.max_frm + 1 ):
                 HR_data_i =  tf.image.convert_image_dtype( 
-                                    tf.image.decode_png(tf.read_file(input_slices[frame_i]), channels=3), 
+                                    tf.image.decode_png(tf.read_file(input_slices[frame_i]), channels=3, dtype=tf.uint16), 
                                     dtype=tf.float32)
                 HR_data += [HR_data_i]
             # the reshape after loading is necessary as the unkown output shape crashes the cropping op
@@ -227,8 +227,8 @@ def loadHR(FLAGS, tar_size):
                 '''
                 
             for fi in range( FLAGS.RNN_N ):
-                HR_data = tf.image.convert_image_dtype( tf.image.decode_png(tf.read_file(output[fi]), channels=3), dtype=tf.float32)
-                LR_data = tf.image.convert_image_dtype( tf.image.decode_png(tf.read_file(output_LR[fi]), channels=3), dtype=tf.float32)
+                HR_data = tf.image.convert_image_dtype( tf.image.decode_png(tf.read_file(output[fi]), channels=3, dtype=tf.uint16), dtype=tf.float32)
+                LR_data = tf.image.convert_image_dtype( tf.image.decode_png(tf.read_file(output_LR[fi]), channels=3, dtype=tf.uint16), dtype=tf.float32)
                 data_list_HR_r.append( HR_data )
                 data_list_LR_r.append( LR_data )
             

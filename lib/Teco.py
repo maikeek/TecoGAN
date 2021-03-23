@@ -140,7 +140,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
             gen_pre_output_warp = tf.contrib.image.dense_image_warp(
                 gen_pre_output, cur_flow)
             gen_warppre.append(gen_pre_output_warp) # warp frame [0,n-1] to frame [1,n]
-            gen_pre_output_warp = preprocessLR( deprocess(gen_pre_output_warp) )
+            #gen_pre_output_warp = preprocessLR( deprocess(gen_pre_output_warp) )
             # apply space-to-depth transform
             gen_pre_output_reshape = tf.reshape(gen_pre_output_warp, (FLAGS.batch_size, FLAGS.crop_size, 4, FLAGS.crop_size, 4, 3) )
             gen_pre_output_reshape = tf.transpose( gen_pre_output_reshape, perm = [0,1,3,2,4,5] )
@@ -248,7 +248,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                     
                 else: # an unconditional Dt
                     tdiscrim_real_output = discriminator_F(real_warp, FLAGS=FLAGS)# [tb,h*FLAGS.crop_dt,w*FLAGS.crop_dt,RRRGGGBBB]
-                    
+
         # Build the tempo discriminator for the fake part
         with tf.name_scope('fake_Tdiscriminator'):
             fake_warp0 = tf.contrib.image.dense_image_warp(t_gen_output, T_vel)
@@ -394,7 +394,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
             t_discrim_fake_loss = tf.log(1 - tdiscrim_fake_output + FLAGS.EPS)
             t_discrim_real_loss = tf.log(tdiscrim_real_output + FLAGS.EPS)
             
-            t_discrim_loss = tf.reduce_mean(-(t_discrim_fake_loss + t_discrim_real_loss))\
+            t_discrim_loss = tf.reduce_mean(-(t_discrim_fake_loss + t_discrim_real_loss)+FLAGS.EPS)
             # a criterion of updating Dst
             t_balance = tf.reduce_mean(t_discrim_real_loss) + t_adversarial_loss
             # if t_balance is very large (>0.4), it means the discriminator is too strong
@@ -497,11 +497,11 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
             
     with tf.name_scope('image_summaries'):
         max_outputs = min(4, FLAGS.batch_size)
-        gif_sum = [ gif_summary('LR', r_inputs, max_outputs=max_outputs, fps=3),
+        gif_sum = [ gif_summary('LR', deprocessLR(r_inputs), max_outputs=max_outputs, fps=3),
                 gif_summary('HR', deprocess(r_targets), max_outputs=max_outputs, fps=3),
                 gif_summary('Generated', deprocess(gen_outputs), max_outputs=max_outputs, fps=3),
                 gif_summary('WarpPreGen', deprocess(gen_warppre), max_outputs=max_outputs, fps=3),]
-        # todo add fake_warp and real_warp in gif_sum as well
+                # todo add fake_warp and real_warp in gif_sum as well
         
     Network = collections.namedtuple('Network', 'gen_output, train, learning_rate, update_list, '
                                          'update_list_name, update_list_avg, image_summary, global_step')

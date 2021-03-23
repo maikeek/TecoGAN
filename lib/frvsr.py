@@ -49,18 +49,20 @@ def generator_F(gen_inputs, gen_output_channels, reuse=False, FLAGS=None):
     # The Bx residual blocks
     def residual_block(inputs, output_channel = 64, stride = 1, scope = 'res_block'):
         with tf.variable_scope(scope):
-            net = conv2(inputs, 3, output_channel, stride, use_bias=True, scope='conv_1')
-            net = tf.nn.relu(net)
+            net = lrelu(inputs, 0.2)
+            net = conv2(net, 3, output_channel, stride, use_bias=True, scope='conv_1')
+            net = lrelu(net, 0.2)
             net = conv2(net, 3, output_channel, stride, use_bias=True, scope='conv_2')
             net = net + inputs
-
+            
         return net
 
     with tf.variable_scope('generator_unit', reuse=reuse):
         # The input layer
         with tf.variable_scope('input_stage'):
             net = conv2(gen_inputs, 3, 64, 1, scope='conv')
-            stage1_output = tf.nn.relu(net)
+            stage1_output = net
+            #stage1_output = lrelu(net, 0.2)
 
         net = stage1_output
 
@@ -71,19 +73,20 @@ def generator_F(gen_inputs, gen_output_channels, reuse=False, FLAGS=None):
 
         with tf.variable_scope('conv_tran2highres'):
             net = conv2_tran(net, 3, 64, 2, scope='conv_tran1')
-            net = tf.nn.relu(net)
+            net = lrelu(net, 0.2)
             
             net = conv2_tran(net, 3, 64, 2, scope='conv_tran2')
-            net = tf.nn.relu(net)
+            net = lrelu(net, 0.2)
         
         with tf.variable_scope('output_stage'):
             net = conv2(net, 3, gen_output_channels, 1, scope='conv')
+            net = lrelu(net, 0.2)
             low_res_in = gen_inputs[:,:,:,0:3] # ignore warped pre high res
             # for tensoflow API<=1.13, bicubic_four is equivalent to the followings:
             # hi_shape = tf.shape( net )
             # bicubic_hi = tf.image.resize_bicubic( low_res_in, (hi_shape[1], hi_shape[2])) # no GPU implementation
             bicubic_hi = bicubic_four( low_res_in ) # can put on GPU
             net = net + bicubic_hi
-            net = preprocess( net )
+            #net = preprocess( net )
     return net
     

@@ -80,7 +80,7 @@ Flags.DEFINE_float('warp_scaling', 1.0, 'The scaling factor for the warp')
 Flags.DEFINE_boolean('pingpang', False, 'use bi-directional recurrent or not')
 Flags.DEFINE_float('pp_scaling', 1.0, 'factor of pingpang term, only works when pingpang is True')
 # Training parameters
-Flags.DEFINE_float('EPS', 1e-12, 'The eps added to prevent nan')
+Flags.DEFINE_float('EPS', 1e-9, 'The eps added to prevent nan')
 Flags.DEFINE_float('learning_rate', 0.0001, 'The learning rate for the network')
 Flags.DEFINE_integer('decay_step', 500000, 'The steps needed to decay the learning rate')
 Flags.DEFINE_float('decay_rate', 0.5, 'The decay rate of each decay step')
@@ -204,7 +204,7 @@ if FLAGS.mode == 'inference':
         gen_output = generator_F(inputs_all, 3, reuse=False, FLAGS=FLAGS)
         # Deprocess the images outputed from the model, and assign things for next frame
         with tf.control_dependencies([ tf.assign(pre_inputs, inputs_raw)]):
-            outputs = tf.assign(pre_gen, deprocess(gen_output))
+            outputs = tf.assign(pre_gen, gen_output)
     
     inputs_frames = tf.concat( (pre_inputs, inputs_raw), axis = -1)
     with tf.variable_scope('fnet'):

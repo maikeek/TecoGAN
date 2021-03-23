@@ -25,12 +25,12 @@ def deprocess(image):
 
 def preprocessLR(image):
     with tf.name_scope("preprocessLR"):
-        return tf.identity(image)
+        return image * 2 - 1
 
 
 def deprocessLR(image):
     with tf.name_scope("deprocessLR"):
-        return tf.identity(image)
+        return (image + 1) / 2
 
 # Define the convolution transpose building block
 def conv2_tran(batch_input, kernel=3, output_channel=64, stride=1, use_bias=True, scope='conv'):
