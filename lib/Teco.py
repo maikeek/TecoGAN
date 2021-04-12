@@ -97,29 +97,6 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
         learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, 
                         global_step, FLAGS.decay_step, FLAGS.decay_rate, staircase=FLAGS.stair)
         incr_global_step = tf.assign(global_step, global_step + 1)
-        
-    # Build the generator part, fnet
-    with tf.device('/gpu:0'), tf.variable_scope('fnet'):
-        Frame_t_pre = r_inputs[:, 0:-1, :,:,:] 
-        # batch, frame-1, FLAGS.crop_size, FLAGS.crop_size, output_channel
-        Frame_t = r_inputs[:, 1:, :,:,:] 
-        # batch, frame-1, FLAGS.crop_size, FLAGS.crop_size, output_channel
-        
-        fnet_input = tf.concat( (Frame_t_pre, Frame_t), axis = -1 )
-        fnet_input = tf.reshape( fnet_input, (FLAGS.batch_size*(inputimages-1), FLAGS.crop_size, FLAGS.crop_size, 2*output_channel) )
-        # batch*(frame-1), FLAGS.crop_size, FLAGS.crop_size, output_channel
-        gen_flow_lr = fnet( fnet_input, reuse=False ) 
-        # batch * (inputimages-1), FLAGS.crop_size, FLAGS.crop_size, 2
-        gen_flow = upscale_four(gen_flow_lr*4.0) # a linear up-sampling
-        # batch * (inputimages-1), FLAGS.crop_size*4, FLAGS.crop_size*4, 2
-        gen_flow = tf.reshape( gen_flow, (FLAGS.batch_size,(inputimages-1), FLAGS.crop_size*4, FLAGS.crop_size*4, 2) )
-        # Compute the euclidean distance between the two features (input_frames and s_input_warp) as the warp_loss
-        input_frames = tf.reshape( Frame_t, (FLAGS.batch_size*(inputimages-1), FLAGS.crop_size, FLAGS.crop_size, output_channel) )
-        
-    # tf.contrib.image.dense_image_warp, only in tf1.8 or larger, no GPU support
-    s_input_warp = tf.contrib.image.dense_image_warp( 
-        tf.reshape( Frame_t_pre, (FLAGS.batch_size*(inputimages-1), FLAGS.crop_size, FLAGS.crop_size, output_channel) ),
-        gen_flow_lr) # (FLAGS.batch_size*(inputimages-1), FLAGS.crop_size, FLAGS.crop_size, output_channel)
     
     # Build the generator part, a recurrent generator
     with tf.variable_scope('generator'):
@@ -134,15 +111,9 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
         gen_outputs.append(gen_pre_output) # frame 0, done
         
         for frame_i in range( inputimages - 1 ):
-            # warp the previously generated frame
-            cur_flow = gen_flow[:, frame_i, :,:,:]
-            cur_flow.set_shape( (FLAGS.batch_size, FLAGS.crop_size*4, FLAGS.crop_size*4, 2) )
-            gen_pre_output_warp = tf.contrib.image.dense_image_warp(
-                gen_pre_output, cur_flow)
-            gen_warppre.append(gen_pre_output_warp) # warp frame [0,n-1] to frame [1,n]
-            #gen_pre_output_warp = preprocessLR( deprocess(gen_pre_output_warp) )
+            gen_warppre.append(gen_pre_output) # warp frame [0,n-1] to frame [1,n]
             # apply space-to-depth transform
-            gen_pre_output_reshape = tf.reshape(gen_pre_output_warp, (FLAGS.batch_size, FLAGS.crop_size, 4, FLAGS.crop_size, 4, 3) )
+            gen_pre_output_reshape = tf.reshape(gen_pre_output, (FLAGS.batch_size, FLAGS.crop_size, 4, FLAGS.crop_size, 4, 3) )
             gen_pre_output_reshape = tf.transpose( gen_pre_output_reshape, perm = [0,1,3,2,4,5] )
             # batch,FLAGS.crop_size, FLAGS.crop_size, 4, 4, 3
             gen_pre_output_reshape = tf.reshape(gen_pre_output_reshape, (FLAGS.batch_size, FLAGS.crop_size, FLAGS.crop_size, 3*4*4) )
@@ -187,32 +158,6 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                 (FLAGS.batch_size*t_size, FLAGS.crop_size*4, FLAGS.crop_size*4, 3) )
             t_batch = FLAGS.batch_size*t_size//3
             
-            if not FLAGS.pingpang: # backward motion has to be calculated
-                fnet_input_back = tf.concat( (r_inputs[:, 2:t_size:3, :,:,:], r_inputs[:, 1:t_size:3, :,:,:] ), axis = -1 )
-                fnet_input_back = tf.reshape( fnet_input_back, (t_batch, FLAGS.crop_size, FLAGS.crop_size, 2*output_channel) )
-                
-                with tf.variable_scope('fnet'):
-                    gen_flow_back_lr = fnet( fnet_input_back, reuse=True ) 
-                    # t_batch, FLAGS.crop_size, FLAGS.crop_size, 2
-                    gen_flow_back = upscale_four(gen_flow_back_lr*4.0)
-                # t_batch, FLAGS.crop_size*4, FLAGS.crop_size*4, 2
-                gen_flow_back = tf.reshape( gen_flow_back, (FLAGS.batch_size, t_size//3, FLAGS.crop_size*4, FLAGS.crop_size*4, 2) )
-                
-                T_inputs_VPre_batch = tf.identity(gen_flow[:,0:t_size:3,:,:,:]) # forward motion reused, 
-                T_inputs_V_batch = tf.zeros_like(T_inputs_VPre_batch) # no motion for middle frames, todo remove for better performance
-                T_inputs_VNxt_batch = tf.identity(gen_flow_back) # backward motion
-                # The above are all in shape of (FLAGS.batch_size, t_size//3, crop_size, crop_size, 2)
-                
-            else:# motion could be reused for Ping-pang sequence, also all in shape of (FLAGS.batch_size, t_size//3, crop_size, crop_size, 2)
-                T_inputs_VPre_batch = tf.identity(gen_flow[:,0:t_size:3,:,:,:]) # forward motion reused, 
-                T_inputs_V_batch = tf.zeros_like(T_inputs_VPre_batch) # no motion for middle frames, 
-                T_inputs_VNxt_batch = tf.identity(gen_flow[:,-2:-1-t_size:-3,:,:,:]) # backward motion reused
-            
-            T_vel = tf.stack( [T_inputs_VPre_batch, T_inputs_V_batch, T_inputs_VNxt_batch], axis = 2 )
-            # batch, t_size/3, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 2
-            T_vel = tf.reshape(T_vel, (FLAGS.batch_size*t_size, FLAGS.crop_size*4, FLAGS.crop_size*4, 2) )
-            T_vel = tf.stop_gradient( T_vel ) # won't passing gradient to fnet from discriminator, details in TecoGAN supplemental paper 
-            
         if(FLAGS.crop_dt < 1.0): # crop out unstable part for temporal discriminator, details in TecoGAN supplemental paper 
             crop_size_dt = int( FLAGS.crop_size * 4 * FLAGS.crop_dt)
             offset_dt = (FLAGS.crop_size * 4 - crop_size_dt) // 2
@@ -221,7 +166,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
         
         # Build the tempo discriminator for the real part
         with tf.name_scope('real_Tdiscriminator'):
-            real_warp0 = tf.contrib.image.dense_image_warp(t_targets, T_vel) 
+            real_warp0 = t_targets
             # batch*t_size, h=FLAGS.crop_size*4, w=FLAGS.crop_size*4, 3
             with tf.device('/gpu:0'), tf.variable_scope('tdiscriminator', reuse=False):
                 real_warp = tf.reshape(real_warp0, (t_batch, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 3))#[tb,T=3,h,w,ch=3 for RGB]
@@ -230,46 +175,31 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                 if(FLAGS.crop_dt < 1.0):
                     real_warp = tf.image.crop_to_bounding_box(real_warp, offset_dt, offset_dt, crop_size_dt, crop_size_dt)
                     
-                if(FLAGS.Dt_mergeDs): # a spatio-temporal D
-                    if(FLAGS.crop_dt < 1.0): real_warp = tf.pad(real_warp, paddings, "CONSTANT" )
-                    with tf.variable_scope('sdiscriminator', reuse=False): # actually no more variable under this scope... 
-                        before_warp = tf.reshape(t_targets, (t_batch, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 3))#[tb,3=T,h,w,3=RGB]
-                        before_warp = tf.transpose(before_warp, perm=[0, 2, 3, 4, 1]) # [b,h,w,3RGB,3T]
-                        before_warp = tf.reshape(before_warp, (t_batch, FLAGS.crop_size*4, FLAGS.crop_size*4, 3*3)) # [b,h,w,9=RRRGGGBBB]
-                        
-                        t_input = tf.reshape(r_inputs[:,:t_size,:,:,:], \
-                            (t_batch, 3, FLAGS.crop_size, FLAGS.crop_size, -1) )
-                        t_input = tf.transpose(t_input, perm=[0, 2, 3, 4, 1]) # [tb,h//4,w//4,3RGB,3T]
-                        t_input = tf.reshape(t_input, (t_batch, FLAGS.crop_size, FLAGS.crop_size,-1) ) # [tb,h//4,w//4,9=RRRGGGBBB]
-                        input_hi = tf.image.resize_images( t_input, (FLAGS.crop_size*4, FLAGS.crop_size*4) )# [tb,h,w,9=RRRGGGBBB]
-                        real_warp = tf.concat( (before_warp, real_warp, input_hi), axis = -1)# [tb,h,w,9 + 9 + 9]
-                        
-                    tdiscrim_real_output, real_layers = discriminator_F(real_warp, FLAGS=FLAGS)
+                with tf.variable_scope('sdiscriminator', reuse=False): # actually no more variable under this scope... 
+                    before_warp = tf.reshape(t_targets, (t_batch, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 3))#[tb,3=T,h,w,3=RGB]
+                    before_warp = tf.transpose(before_warp, perm=[0, 2, 3, 4, 1]) # [b,h,w,3RGB,3T]
+                    before_warp = tf.reshape(before_warp, (t_batch, FLAGS.crop_size*4, FLAGS.crop_size*4, 3*3)) # [b,h,w,9=RRRGGGBBB]
                     
-                else: # an unconditional Dt
-                    tdiscrim_real_output = discriminator_F(real_warp, FLAGS=FLAGS)# [tb,h*FLAGS.crop_dt,w*FLAGS.crop_dt,RRRGGGBBB]
+                    t_input = tf.reshape(r_inputs[:,:t_size,:,:,:], \
+                        (t_batch, 3, FLAGS.crop_size, FLAGS.crop_size, -1) )
+                    t_input = tf.transpose(t_input, perm=[0, 2, 3, 4, 1]) # [tb,h//4,w//4,3RGB,3T]
+                    t_input = tf.reshape(t_input, (t_batch, FLAGS.crop_size, FLAGS.crop_size,-1) ) # [tb,h//4,w//4,9=RRRGGGBBB]
+                    input_hi = tf.image.resize_images( t_input, (FLAGS.crop_size*4, FLAGS.crop_size*4) )# [tb,h,w,9=RRRGGGBBB]
+                    real_input = tf.concat( (before_warp, input_hi), axis = -1)# [tb,h,w,9 + 9 + 9]
+                    
+                tdiscrim_real_output, real_layers = discriminator_F(real_input, FLAGS=FLAGS)
+
 
         # Build the tempo discriminator for the fake part
         with tf.name_scope('fake_Tdiscriminator'):
-            fake_warp0 = tf.contrib.image.dense_image_warp(t_gen_output, T_vel)
             with tf.device('/gpu:0'), tf.variable_scope('tdiscriminator', reuse=True): # reuse weights
-                fake_warp = tf.reshape(fake_warp0, (t_batch, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 3))
-                fake_warp = tf.transpose(fake_warp, perm=[0, 2, 3, 4, 1])
-                fake_warp = tf.reshape(fake_warp, (t_batch,FLAGS.crop_size*4, FLAGS.crop_size*4,9) )
-                if(FLAGS.crop_dt < 1.0):
-                    fake_warp = tf.image.crop_to_bounding_box(fake_warp, offset_dt, offset_dt, crop_size_dt, crop_size_dt)
-                    
-                if(FLAGS.Dt_mergeDs): # a spatio-temporal D
-                    if(FLAGS.crop_dt < 1.0): fake_warp = tf.pad(fake_warp, paddings, "CONSTANT" )
-                    with tf.variable_scope('sdiscriminator', reuse=True): # actually no more variable under this scope... 
-                        before_warp = tf.reshape(t_gen_output, (t_batch, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 3))
-                        before_warp = tf.transpose(before_warp, perm=[0, 2, 3, 4, 1])
-                        before_warp = tf.reshape(before_warp, (t_batch, FLAGS.crop_size*4, FLAGS.crop_size*4, 3*3))
-                        # input_hi is reused
-                        fake_warp = tf.concat( (before_warp, fake_warp, input_hi), axis = -1) # [tb,h,w,9 + 9 + 9]
-                    tdiscrim_fake_output, fake_layers = discriminator_F(fake_warp, FLAGS=FLAGS)
-                else:
-                    tdiscrim_fake_output = discriminator_F(fake_warp, FLAGS=FLAGS)
+                with tf.variable_scope('sdiscriminator', reuse=True): # actually no more variable under this scope... 
+                    before_warp = tf.reshape(t_gen_output, (t_batch, 3, FLAGS.crop_size*4, FLAGS.crop_size*4, 3))
+                    before_warp = tf.transpose(before_warp, perm=[0, 2, 3, 4, 1])
+                    before_warp = tf.reshape(before_warp, (t_batch, FLAGS.crop_size*4, FLAGS.crop_size*4, 3*3))
+                    # input_hi is reused
+                    fake_input = tf.concat( (before_warp, input_hi), axis = -1) # [tb,h,w,9 + 9 + 9]
+                tdiscrim_fake_output, fake_layers = discriminator_F(fake_input, FLAGS=FLAGS)
                     
         # prepare the layer between discriminators
         if(FLAGS.D_LAYERLOSS): 
@@ -324,15 +254,6 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
             update_list_name += ["l2_content_loss"]
             gen_loss = content_loss
         
-        # Warp loss
-        with tf.variable_scope('warp_loss'):
-            diff2_mse = input_frames - s_input_warp 
-            # (FLAGS.batch_size*(inputimages), FLAGS.crop_size, FLAGS.crop_size, 3)
-            warp_loss = tf.reduce_mean(tf.reduce_sum(tf.square(diff2_mse), axis=[3]))
-            update_list += [warp_loss]
-            update_list_name += ["l2_warp_loss"]
-            # the following line is useless, because low-res warping has no gradient on generator
-            # gen_loss += FLAGS.warp_scaling * warp_loss 
                         
         vgg_loss = None
         vgg_loss_list = []
@@ -437,16 +358,11 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
     # Build the Adam_train and Return the network
     with tf.variable_scope('generator_train'):
         gen_optimizer = tf.train.AdamOptimizer(learning_rate, beta1=FLAGS.beta, epsilon=FLAGS.adameps)
-        fnet_optimizer = tf.train.AdamOptimizer(learning_rate, beta1=FLAGS.beta, epsilon=FLAGS.adameps)
         gen_tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-        fnet_tvars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='fnet')
-        fnet_loss = FLAGS.warp_scaling * warp_loss + gen_loss
             
         if(not GAN_Flag):
             gen_grads_and_vars = gen_optimizer.compute_gradients(gen_loss, gen_tvars)
-            fnet_grads_and_vars = fnet_optimizer.compute_gradients(fnet_loss, fnet_tvars)
             gen_train = gen_optimizer.apply_gradients(gen_grads_and_vars)
-            fnet_train = fnet_optimizer.apply_gradients(fnet_grads_and_vars)
         else:
             update_list_avg += [tb, dt_ratio]
             update_list_name += ["t_balance", "Dst_ratio"]
@@ -462,11 +378,9 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                     ''' train generator with discriminator '''                    
                     tdiscrim_train = tdiscrim_optimizer.apply_gradients(tdiscrim_grads_and_vars)                    
                     with tf.control_dependencies([ tf.assign_add(counter1, 1), update_tb, tdiscrim_train ]):
-                        gen_grads_and_vars1 = gen_optimizer.compute_gradients(gen_loss, gen_tvars)
-                        fnet_grads_and_vars1 = fnet_optimizer.compute_gradients(fnet_loss, fnet_tvars)                    
+                        gen_grads_and_vars1 = gen_optimizer.compute_gradients(gen_loss, gen_tvars)                  
                         gen_train1 = gen_optimizer.apply_gradients(gen_grads_and_vars1)
-                        fnet_train1 = gen_optimizer.apply_gradients(fnet_grads_and_vars1)
-                    return gen_train1, fnet_train1, gen_grads_and_vars1, fnet_grads_and_vars1
+                    return gen_train1, gen_grads_and_vars1
                     
                     
                 def train_gen_withoutD():
@@ -475,12 +389,10 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                     sometimes important, when discriminator is too good
                     '''
                     with tf.control_dependencies([ tf.assign_add(counter2, 1), update_tb ]):
-                        gen_grads_and_vars2 = gen_optimizer.compute_gradients(gen_loss, gen_tvars)
-                        fnet_grads_and_vars2 = fnet_optimizer.compute_gradients(fnet_loss, fnet_tvars)                    
+                        gen_grads_and_vars2 = gen_optimizer.compute_gradients(gen_loss, gen_tvars)                 
                         gen_train2 = gen_optimizer.apply_gradients(gen_grads_and_vars2)
-                        fnet_train2 = gen_optimizer.apply_gradients(fnet_grads_and_vars2)
 
-                    return gen_train2, fnet_train2, gen_grads_and_vars2, fnet_grads_and_vars2
+                    return gen_train2, gen_grads_and_vars2
                 
                 # train D once, G twice
                 # gen_train, fnet_train, gen_grads_and_vars, fnet_grads_and_vars = \
@@ -490,7 +402,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                 # gen_train, fnet_train, gen_grads_and_vars, fnet_grads_and_vars = train_gen_withD()
                 
                 # train D adaptively
-                gen_train, fnet_train, gen_grads_and_vars, fnet_grads_and_vars = \
+                gen_train, gen_grads_and_vars,  = \
                      tf.cond( tf.less(tb, FLAGS.Dbalance), train_gen_withD, train_gen_withoutD )
                 update_list_avg += [counter1, counter2]
                 update_list_name += ["withD_counter", "w_o_D_counter"]
@@ -507,7 +419,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
                                          'update_list_name, update_list_avg, image_summary, global_step')
     return Network(
         gen_output = s_gen_output,
-        train = tf.group(update_loss, incr_global_step, gen_train, fnet_train),
+        train = tf.group(update_loss, incr_global_step, gen_train),
         learning_rate = learning_rate,
         update_list = update_list,
         update_list_name = update_list_name,

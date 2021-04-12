@@ -207,12 +207,8 @@ if FLAGS.mode == 'inference':
             outputs = tf.assign(pre_gen, gen_output)
     
     inputs_frames = tf.concat( (pre_inputs, inputs_raw), axis = -1)
-    with tf.variable_scope('fnet'):
-        gen_flow_lr = fnet( inputs_frames, reuse=False)
-        gen_flow_lr = tf.pad(gen_flow_lr, paddings, "SYMMETRIC") 
-        gen_flow = upscale_four(gen_flow_lr*4.0)
-        gen_flow.set_shape( output_shape[:-1]+[2] )
-    pre_warp_hi = tf.contrib.image.dense_image_warp(pre_gen, gen_flow)
+
+    pre_warp_hi = pre_gen
     before_ops = tf.assign(pre_warp, pre_warp_hi)
 
     print('Finish building the network')
