@@ -87,6 +87,6 @@ def generator_F(gen_inputs, gen_output_channels, reuse=False, FLAGS=None):
             # bicubic_hi = tf.image.resize_bicubic( low_res_in, (hi_shape[1], hi_shape[2])) # no GPU implementation
             bicubic_hi = bicubic_four( low_res_in ) # can put on GPU
             net = net + bicubic_hi
-            #net = preprocess( net )
+            net = preprocess( net )
     return net
     

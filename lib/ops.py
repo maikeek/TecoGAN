@@ -25,12 +25,12 @@ def deprocess(image):
 
 def preprocessLR(image):
     with tf.name_scope("preprocessLR"):
-        return image * 2 - 1
+        return tf.identity(image)
 
 
 def deprocessLR(image):
     with tf.name_scope("deprocessLR"):
-        return (image + 1) / 2
+        return tf.identity(image)
 
 # Define the convolution transpose building block
 def conv2_tran(batch_input, kernel=3, output_channel=64, stride=1, use_bias=True, scope='conv'):
@@ -520,8 +520,10 @@ def gif_summary(name, tensor, max_outputs, fps, collections=None, family=None):
 
 ### Numpy functions ##################################################################################
 def save_img(out_path, img):
-    img = (img + 1) / 2
-    img = np.clip(img*65535.0, 0, 65535).astype(np.uint16)
+    if path.endswith(".jpeg") or path.endswith(".jpg"):
+        img = np.clip(img*255.0, 0, 255).astype(np.uint8)
+    else: 
+        img = np.clip(img*65535.0, 0, 65535).astype(np.uint16)
     cv.imwrite(out_path, img[:,:,::-1])
     
     

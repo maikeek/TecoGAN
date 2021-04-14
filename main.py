@@ -204,7 +204,7 @@ if FLAGS.mode == 'inference':
         gen_output = generator_F(inputs_all, 3, reuse=False, FLAGS=FLAGS)
         # Deprocess the images outputed from the model, and assign things for next frame
         with tf.control_dependencies([ tf.assign(pre_inputs, inputs_raw)]):
-            outputs = tf.assign(pre_gen, gen_output)
+            outputs = tf.assign(pre_gen, deprocess(gen_output))
     
     inputs_frames = tf.concat( (pre_inputs, inputs_raw), axis = -1)
     with tf.variable_scope('fnet'):

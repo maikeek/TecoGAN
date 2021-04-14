@@ -140,7 +140,7 @@ def TecoGAN(r_inputs, r_targets, FLAGS, GAN_Flag=True):
             gen_pre_output_warp = tf.contrib.image.dense_image_warp(
                 gen_pre_output, cur_flow)
             gen_warppre.append(gen_pre_output_warp) # warp frame [0,n-1] to frame [1,n]
-            #gen_pre_output_warp = preprocessLR( deprocess(gen_pre_output_warp) )
+            gen_pre_output_warp = preprocessLR( deprocess(gen_pre_output_warp) )
             # apply space-to-depth transform
             gen_pre_output_reshape = tf.reshape(gen_pre_output_warp, (FLAGS.batch_size, FLAGS.crop_size, 4, FLAGS.crop_size, 4, 3) )
             gen_pre_output_reshape = tf.transpose( gen_pre_output_reshape, perm = [0,1,3,2,4,5] )

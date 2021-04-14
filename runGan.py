@@ -99,7 +99,7 @@ elif( runcase == 1 ): # inference a trained model
     dirstr = './results/' # the place to save the results
     #testpre = ['calendar'] # the test cases
     #testpre = ['Sq01_010_rl_bg1', 'Sq02_010_rl_bg1','Sq01_010_rl_chr', 'Sq02_010_rl_chr','Sq01_010_rl_bg2'] # the test cases
-    testpre = ['Sq01_010_comp', 'Sq02_010_comp']
+    testpre = ['Sq010_020_comp']
     
     if (not os.path.exists(dirstr)): os.mkdir(dirstr)
     
@@ -110,11 +110,11 @@ elif( runcase == 1 ): # inference a trained model
             "--output_dir",  dirstr,    # Set the place to put the results.
             "--summary_dir", os.path.join(dirstr, 'log/'), # Set the place to put the log. 
             "--mode","inference", 
-            "--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/v005/test_extra", testpre[nn]),   # the LR directory
+            "--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/v005/16bit_test", testpre[nn]),   # the LR directory
             #"--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/", "Test"),   # the LR directory
             #"--input_dir_HR", os.path.join("./HR/", testpre[nn]),  # the HR directory
             # one of (input_dir_HR,input_dir_LR) should be given
-            "--output_pre", os.path.join("v005_extra", testpre[nn]), # the subfolder to save current scene, optional
+            "--output_pre", os.path.join("16bit_test", 'Sq010_020_comp_temp'), # the subfolder to save current scene, optional
             "--num_resblock", "16",  # our model has 16 residual blocks, 
             # the pre-trained FRVSR and TecoGAN mini have 10 residual blocks
             #"--checkpoint", './model/TecoGAN_Dinomite_05_LRHR',  # the path of the trained model,
@@ -159,7 +159,7 @@ elif( runcase == 3 ): # Train TecoGAN
     FRVSRModel = "ex_FRVSRmm-dd-hh/model-500000"
     '''
     #FRVSRModel = "model/ourFRVSR"
-    FRVSRModel = "ex_FRVSR03-05-17/model-237303"
+    FRVSRModel = "ex_FRVSR04-12-11/model-97189"
     if(not os.path.exists(FRVSRModel+".data-00000-of-00001")):
         # Download our pre-trained FRVSR model
         print("pre-trained FRVSR model not found, downloading")
@@ -179,7 +179,7 @@ elif( runcase == 3 ): # Train TecoGAN
         "--output_dir", train_dir, # Set the place to save the models.
         "--summary_dir", os.path.join(train_dir,"log/"), # Set the place to save the log. 
         "--mode","train",
-        "--batch_size", "3" , # small, because GPU memory is not big
+        "--batch_size", "4" , # small, because GPU memory is not big
         "--RNN_N", "10" , # train with a sequence of RNN_N frames, >6 is better, >10 is not necessary
         # "--movingFirstFrame", # a data augmentation
         "--random_crop",
@@ -190,7 +190,7 @@ elif( runcase == 3 ): # Train TecoGAN
         "--decay_rate", "1.0", # 1.0 means no decay
         "--stair",
         "--beta", "0.9", # ADAM training parameter beta
-        "--max_iter", "900000", # 500k or more, the one we present is trained for 900k
+        "--max_iter", "500000", # 500k or more, the one we present is trained for 900k
         "--save_freq", "10000", # the frequency we save models
         # -- network architecture parameters --
         "--num_resblock", "16", # FRVSR and TecoGANmini has num_resblock as 10. The TecoGAN has 16.
@@ -217,7 +217,7 @@ elif( runcase == 3 ): # Train TecoGAN
         "--end_dir_val", "2013",
         "--max_frm", "116",
         # -- cpu memory for data loading --
-        "--queue_thread", "6",# Cpu threads for the data. >4 to speedup the training
+        "--queue_thread", "10",# Cpu threads for the data. >4 to speedup the training
         "--name_video_queue_capacity", "1024",
         "--video_queue_capacity", "1024",
     ]
@@ -232,17 +232,17 @@ elif( runcase == 3 ): # Train TecoGAN
         whether to load the whole graph icluding ADAM training averages/momentums/ and so on
         or just load existing pre-trained weights.
     '''
-    #cmd1 += [ # based on a pre-trained FRVSR model. Here we want to train a new adversarial training
-    #    "--pre_trained_model", # True
-    #    "--checkpoint", FRVSRModel,
-    #]
+    cmd1 += [ # based on a pre-trained FRVSR model. Here we want to train a new adversarial training
+        "--pre_trained_model", # True
+        "--checkpoint", FRVSRModel,
+    ]
     
     # the following can be used to train TecoGAN continuously
-    old_model = 'ex_TecoGAN03-08-10/model-500000' 
-    cmd1 += [ # Here we want to train continuously
-         "--nopre_trained_model", # False
-         "--checkpoint", old_model,
-     ]
+    #old_model = 'ex_TecoGAN03-08-10/model-500000' 
+    #cmd1 += [ # Here we want to train continuously
+    #     "--nopre_trained_model", # False
+    #     "--checkpoint", old_model,
+    # ]
     
     ''' parameters for GAN training '''
     cmd1 += [
@@ -259,7 +259,7 @@ elif( runcase == 3 ): # Train TecoGAN
     cmd1 += [ # here, the fading in is disabled 
         "--Dt_ratio_max", "1.0",
         "--Dt_ratio_0", "0.0", 
-        "--Dt_ratio_add", "0.00004", #fade in over 25k step
+        "--Dt_ratio_add", "0.00025", #fade in over 4k step
     ]
     ''' Other Losses '''
     cmd1 += [
@@ -297,7 +297,7 @@ elif( runcase == 4 ): # Train FRVSR, loss = l2 warp + l2 content
         "--decay_rate", "0.5", # 1.0 means no decay
         "--stair",
         "--beta", "0.9", # ADAM training parameter beta
-        "--max_iter", "500000", # 500k is usually fine for FRVSR, GAN versions need more to be stable
+        "--max_iter", "100000", # 500k is usually fine for FRVSR, GAN versions need more to be stable
         "--save_freq", "10000", # the frequency we save models
         # -- network architecture parameters --
         "--num_resblock", "10", # a smaller model
@@ -314,7 +314,7 @@ elif( runcase == 4 ): # Train FRVSR, loss = l2 warp + l2 content
         "--end_dir_val", "2013",
         "--max_frm", "116",
         # -- cpu memory for data loading --
-        "--queue_thread", "6",# Cpu threads for the data. >4 to speedup the training
+        "--queue_thread", "10",# Cpu threads for the data. >4 to speedup the training
         "--name_video_queue_capacity", "1024",
         "--video_queue_capacity", "1024",
     ]

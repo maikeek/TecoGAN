@@ -114,3 +114,4 @@ HR
 # runs
 ex_*
 tx_*
+.vscode/settings.json
