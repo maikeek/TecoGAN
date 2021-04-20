@@ -520,7 +520,7 @@ def gif_summary(name, tensor, max_outputs, fps, collections=None, family=None):
 
 ### Numpy functions ##################################################################################
 def save_img(out_path, img):
-    if path.endswith(".jpeg") or path.endswith(".jpg"):
+    if out_path.endswith(".jpeg") or out_path.endswith(".jpg"):
         img = np.clip(img*255.0, 0, 255).astype(np.uint8)
     else: 
         img = np.clip(img*65535.0, 0, 65535).astype(np.uint16)

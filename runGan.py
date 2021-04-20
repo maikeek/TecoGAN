@@ -97,9 +97,7 @@ if( runcase == 0 ): # download inference data, trained models#
 elif( runcase == 1 ): # inference a trained model
     
     dirstr = './results/' # the place to save the results
-    #testpre = ['calendar'] # the test cases
-    #testpre = ['Sq01_010_rl_bg1', 'Sq02_010_rl_bg1','Sq01_010_rl_chr', 'Sq02_010_rl_chr','Sq01_010_rl_bg2'] # the test cases
-    testpre = ['Sq010_020_comp']
+    testpre = ['Sq01_010_comp', 'Sq02_010_comp']
     
     if (not os.path.exists(dirstr)): os.mkdir(dirstr)
     
@@ -110,15 +108,15 @@ elif( runcase == 1 ): # inference a trained model
             "--output_dir",  dirstr,    # Set the place to put the results.
             "--summary_dir", os.path.join(dirstr, 'log/'), # Set the place to put the log. 
             "--mode","inference", 
-            "--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/v005/16bit_test", testpre[nn]),   # the LR directory
+            "--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/v005/test_extra", testpre[nn]),   # the LR directory
             #"--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/", "Test"),   # the LR directory
             #"--input_dir_HR", os.path.join("./HR/", testpre[nn]),  # the HR directory
             # one of (input_dir_HR,input_dir_LR) should be given
-            "--output_pre", os.path.join("16bit_test", 'Sq010_020_comp_temp'), # the subfolder to save current scene, optional
+            "--output_pre", os.path.join("v006_extra", testpre[nn]), # the subfolder to save current scene, optional
             "--num_resblock", "16",  # our model has 16 residual blocks, 
             # the pre-trained FRVSR and TecoGAN mini have 10 residual blocks
             #"--checkpoint", './model/TecoGAN_Dinomite_05_LRHR',  # the path of the trained model,
-            "--checkpoint", './ex_TecoGAN03-08-10/model-500000',
+            "--checkpoint", './ex_TecoGAN04-15-10/model-320000',
             "--output_ext", "png"               # png is more accurate, jpg is smaller
         ]
         mycall(cmd1).communicate()
@@ -159,7 +157,7 @@ elif( runcase == 3 ): # Train TecoGAN
     FRVSRModel = "ex_FRVSRmm-dd-hh/model-500000"
     '''
     #FRVSRModel = "model/ourFRVSR"
-    FRVSRModel = "ex_FRVSR04-12-11/model-97189"
+    FRVSRModel = "ex_FRVSR04-14-17/model-56299"
     if(not os.path.exists(FRVSRModel+".data-00000-of-00001")):
         # Download our pre-trained FRVSR model
         print("pre-trained FRVSR model not found, downloading")
@@ -179,9 +177,9 @@ elif( runcase == 3 ): # Train TecoGAN
         "--output_dir", train_dir, # Set the place to save the models.
         "--summary_dir", os.path.join(train_dir,"log/"), # Set the place to save the log. 
         "--mode","train",
-        "--batch_size", "4" , # small, because GPU memory is not big
+        "--batch_size", "3" , # small, because GPU memory is not big
         "--RNN_N", "10" , # train with a sequence of RNN_N frames, >6 is better, >10 is not necessary
-        # "--movingFirstFrame", # a data augmentation
+        "--movingFirstFrame", # a data augmentation
         "--random_crop",
         "--crop_size", "32",
         "--learning_rate", "0.00005",
