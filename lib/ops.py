@@ -14,13 +14,15 @@ from tensorflow.python.distribute.summary_op_util import skip_summary
 def preprocess(image):
     with tf.name_scope("preprocess"):
         # [0, 1] => [-1, 1]
-        return image * 2 - 1
+        return tf.identity(image)
+        #return image * 2 - 1
 
 
 def deprocess(image):
     with tf.name_scope("deprocess"):
         # [-1, 1] => [0, 1]
-        return (image + 1) / 2
+        return tf.identity(image)
+        #return (image + 1) / 2
 
 
 def preprocessLR(image):
@@ -520,7 +522,7 @@ def gif_summary(name, tensor, max_outputs, fps, collections=None, family=None):
 
 ### Numpy functions ##################################################################################
 def save_img(out_path, img):
-    if path.endswith(".jpeg") or path.endswith(".jpg"):
+    if out_path.endswith(".jpeg") or out_path.endswith(".jpg"):
         img = np.clip(img*255.0, 0, 255).astype(np.uint8)
     else: 
         img = np.clip(img*65535.0, 0, 65535).astype(np.uint16)

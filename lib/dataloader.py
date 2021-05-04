@@ -30,11 +30,13 @@ def inference_data_loader(FLAGS):
     # Read in and preprocess the images
     def preprocess_test(name):
         im = cv.imread(name,3).astype(np.float32)[:,:,::-1]
-        #if downSP:
-        #    icol_blur = cv.GaussianBlur( im, (0,0), sigmaX = 1.5)
-        #    im = icol_blur[::4,::4,::]
-        im = im / 65535.0  #np.max(im)
-        im = (2 * im) - 1
+        if downSP:
+            icol_blur = cv.GaussianBlur( im, (0,0), sigmaX = 1.5)
+            im = icol_blur[::4,::4,::]
+        if name.endswith(".jpeg") or name.endswith(".jpg") or 'calendar' in name:
+            im = im / 255.0
+        else:
+            im = im / 65535.0 #np.max(im)
         return im
 
     image_LR = [preprocess_test(_) for _ in image_list_LR]
@@ -221,14 +223,34 @@ def loadHR(FLAGS, tar_size):
                 
             if FLAGS.movingFirstFrame and FLAGS.mode == 'train': # our data augmentation, moving first frame to mimic camera motion
                 print('[Config] Move first frame randomly')
-                raise Exception('Not implemented, try movingFirstFrame = False')
-                '''
-                    movingFirstFrame: the data augmentation is not usable anymore when the LR data is pre-generated. 
-                '''
+                offset_xy = tf.cast(tf.floor(tf.random_uniform([FLAGS.RNN_N, 2], -3.5,4.5)),dtype=tf.int32)
+                offset_xy_LR = offset_xy // 4
+                # [FLAGS.RNN_N , 2], shifts
+                pos_xy = tf.cumsum(offset_xy, axis=0, exclusive=True) # relative positions
+                min_pos = tf.reduce_min( pos_xy, axis=0 )
+                range_pos = tf.reduce_max( pos_xy, axis=0 ) - min_pos # [ shrink x, shrink y ]
+                lefttop_pos = pos_xy - min_pos # crop point
+                moving_decision = tf.random_uniform([], 0, 1, dtype=tf.float32)
                 
             for fi in range( FLAGS.RNN_N ):
                 HR_data = tf.image.convert_image_dtype( tf.image.decode_png(tf.read_file(output[fi]), channels=3, dtype=tf.uint16), dtype=tf.float32)
                 LR_data = tf.image.convert_image_dtype( tf.image.decode_png(tf.read_file(output_LR[fi]), channels=3, dtype=tf.uint16), dtype=tf.float32)
+                if(FLAGS.movingFirstFrame):
+                    if(fi == 0):
+                        HR_data_0 = tf.identity(HR_data)
+                        target_size = tf.shape(HR_data_0)
+                        LR_data_0 = tf.identity(LR_data)
+                        target_size_LR = tf.shape(LR_data_0)
+                        
+                    HR_data_1 = tf.image.crop_to_bounding_box(HR_data_0, 
+                        lefttop_pos[fi][1], lefttop_pos[fi][0], 
+                        target_size[0] - range_pos[1], target_size[1] - range_pos[0])
+                    LR_data_1 = tf.image.crop_to_bounding_box(LR_data_0, 
+                        lefttop_pos[fi][1] // 4, lefttop_pos[fi][0] // 4, 
+                        (target_size[0] - range_pos[1]) // 4, (target_size[1] - range_pos[0]) // 4)
+                    HR_data = tf.cond(moving_decision < 0.7, lambda: tf.identity(HR_data), lambda: tf.identity(HR_data_1))
+                    LR_data = tf.cond(moving_decision < 0.7, lambda: tf.identity(LR_data), lambda: tf.identity(LR_data_1))
+                    output_names[fi] = tf.cond(moving_decision < 0.7, lambda: tf.identity(output_names[fi]), lambda: tf.identity(output_names[0]))
                 data_list_HR_r.append( HR_data )
                 data_list_LR_r.append( LR_data )
             
@@ -250,7 +272,7 @@ def loadHR(FLAGS, tar_size):
                     offset_h = tf.cast(tf.floor(tf.random_uniform([], 0, \
                         tf.cast(target_size[0], tf.float32) - tar_size )),dtype=tf.int32)
                     offset_w_LR = offset_w // 4
-                    offset_h_LR = offset_h // 4  
+                    offset_h_LR = offset_h // 4
                     
                     for frame_t in range(FLAGS.RNN_N):
                         target_images[frame_t] = tf.image.crop_to_bounding_box(target_images[frame_t], 
@@ -277,9 +299,10 @@ def loadHR(FLAGS, tar_size):
                 
         if FLAGS.mode == 'train':
             print('Sequenced batches: {}, sequence length: {}'.format(num_image_list_HR_t_cur, FLAGS.RNN_N))
+            # (output_names + input_images + target_images,\
             batch_list = tf.train.shuffle_batch(output_names + input_images + target_images,\
                             batch_size=int(FLAGS.batch_size), capacity=FLAGS.video_queue_capacity+FLAGS.video_queue_batch*FLAGS.max_frm,
-                            min_after_dequeue=FLAGS.video_queue_capacity, num_threads=FLAGS.queue_thread, seed = FLAGS.rand_seed)
+                            min_after_dequeue=FLAGS.video_queue_capacity, num_threads=FLAGS.queue_thread, seed = FLAGS.rand_seed) 
         else:
             raise Exception('Not implemented')
     return batch_list, num_image_list_HR_t_cur # a k_w_border margin is still there for gaussian blur!!
@@ -288,8 +311,8 @@ def loadHR(FLAGS, tar_size):
 def frvsr_gpu_data_loader(FLAGS, useValData_ph): # useValData_ph, tf bool placeholder, whether to use validationdata
     Data = collections.namedtuple('Data', 'paths_HR, s_inputs, s_targets, image_count, steps_per_epoch')
     tar_size = FLAGS.crop_size * 4
-    # tar_size = (FLAGS.crop_size * 4 ) + int(1.5 * 3.0) * 2 # crop_size * 4, and Gaussian blur margin
-    k_w_border =  0 # int(1.5 * 3.0)
+    #tar_size = (FLAGS.crop_size * 4 ) + int(1.5 * 3.0) * 2 # crop_size * 4, and Gaussian blur margin
+    k_w_border = 0 # int(1.5 * 3.0)
     
     loadHRfunc = loadHR # if FLAGS.queue_thread > 4 else loadHR_batch
     # loadHR_batch load 120 frames at once, is faster for a single queue, and usually will be slower and slower for larger queue_thread
@@ -331,7 +354,7 @@ def frvsr_gpu_data_loader(FLAGS, useValData_ph): # useValData_ph, tf bool placeh
                     
                 curHR = tf.cond( useValData_ph, getValdHR, getTrainHR )
                 curLR = tf.cond( useValData_ph, getValdLR, getTrainLR )
-                input_images.append(curLR)
+                input_images.append(curLR) # (tf_data_gaussDownby4(curHR, 1.5) )
                 
                 input_images[frame_t].set_shape([FLAGS.batch_size,FLAGS.crop_size, FLAGS.crop_size, 3])
                 input_images[frame_t] = preprocessLR(input_images[frame_t])
