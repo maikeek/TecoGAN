@@ -157,7 +157,7 @@ elif( runcase == 3 ): # Train TecoGAN
     FRVSRModel = "ex_FRVSRmm-dd-hh/model-500000"
     '''
     #FRVSRModel = "model/ourFRVSR"
-    FRVSRModel = "ex_FRVSR04-14-17/model-56299"
+    FRVSRModel = "ex_FRVSR04-21-11/model-94675"
     if(not os.path.exists(FRVSRModel+".data-00000-of-00001")):
         # Download our pre-trained FRVSR model
         print("pre-trained FRVSR model not found, downloading")
@@ -236,7 +236,7 @@ elif( runcase == 3 ): # Train TecoGAN
     ]
     
     # the following can be used to train TecoGAN continuously
-    #old_model = 'ex_TecoGAN03-08-10/model-500000' 
+    #old_model = 'ex_TecoGAN04-22-15/model-286566' 
     #cmd1 += [ # Here we want to train continuously
     #     "--nopre_trained_model", # False
     #     "--checkpoint", old_model,
