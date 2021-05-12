@@ -8,7 +8,7 @@ runcase == 3    training TecoGAN
 runcase == 4    training FRVSR
 runcase == ...  coming... data preparation and so on...
 '''
-import os, subprocess, sys, datetime, signal, shutil
+import os, subprocess, sys, datetime, signal, shutil, platform
 
 runcase = int(sys.argv[1])
 print ("Testing test case %d" % runcase)
@@ -28,7 +28,7 @@ def folder_check(path):
     while os.path.exists(path):
         print("Delete existing folder " + path + "?(Y/N)")
         decision = input()
-        if decision == "Y":
+        if decision == "Y" or decision == "y":
             shutil.rmtree(path, ignore_errors=True)
             break
         else:
@@ -97,26 +97,30 @@ if( runcase == 0 ): # download inference data, trained models#
 elif( runcase == 1 ): # inference a trained model
     
     dirstr = './results/' # the place to save the results
-    testpre = ['Sq01_010_comp', 'Sq02_010_comp']
+    target_dir = "./LR/" # the place to look for folder (with image sequences) to upscale
     
+    target_folders = os.listdir(target_dir)
+    select_folders = [] # if you only want to upscale specific folders in the target directory, put them into this list e.g. ["folder1", "folder2"]
+    
+    if select_folders:
+        target_folders = [folder for folder in target_folders if folder in select_folders] # only upscale folders named in the select_folders list
+
     if (not os.path.exists(dirstr)): os.mkdir(dirstr)
     
     # run these test cases one by one:
-    for nn in range(len(testpre)):
+    for nn in range(len(target_folders)):
         cmd1 = ["python", "main.py",
             "--cudaID", "3",            # set the cudaID here to use only one GPU
             "--output_dir",  dirstr,    # Set the place to put the results.
             "--summary_dir", os.path.join(dirstr, 'log/'), # Set the place to put the log. 
             "--mode","inference", 
-            "--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/v005/test_extra", testpre[nn]),   # the LR directory
-            #"--input_dir_LR", os.path.join("/home/carullo/Data/TecoGAN/Dinomite/", "Test"),   # the LR directory
+            "--input_dir_LR", os.path.join(target_dir, target_folders[nn]),   # the LR directory
             #"--input_dir_HR", os.path.join("./HR/", testpre[nn]),  # the HR directory
             # one of (input_dir_HR,input_dir_LR) should be given
-            "--output_pre", os.path.join("v006_extra", testpre[nn]), # the subfolder to save current scene, optional
+            "--output_pre", target_folders[nn], # the subfolder to save current scene, optional
             "--num_resblock", "16",  # our model has 16 residual blocks, 
             # the pre-trained FRVSR and TecoGAN mini have 10 residual blocks
-            #"--checkpoint", './model/TecoGAN_Dinomite_05_LRHR',  # the path of the trained model,
-            "--checkpoint", './ex_TecoGAN04-15-10/model-320000',
+            "--checkpoint", './model/TecoGAN',  # the path of the trained model
             "--output_ext", "png"               # png is more accurate, jpg is smaller
         ]
         mycall(cmd1).communicate()
@@ -151,21 +155,10 @@ elif( runcase == 3 ): # Train TecoGAN
         cmd0 = "wget http://download.tensorflow.org/models/vgg_19_2016_08_28.tar.gz -O " + os.path.join(VGGPath, "vgg19.tar.gz")
         cmd0 += ";tar -xvf " + os.path.join(VGGPath,"vgg19.tar.gz") + " -C " + VGGPath + "; rm "+ os.path.join(VGGPath, "vgg19.tar.gz")
         subprocess.call(cmd0, shell=True)
-        
-    '''
-    Use our pre-trained FRVSR model. If you want to train one, try runcase 4, and update this path by:
-    FRVSRModel = "ex_FRVSRmm-dd-hh/model-500000"
-    '''
-    #FRVSRModel = "model/ourFRVSR"
-    FRVSRModel = "ex_FRVSR04-21-11/model-94675"
-    if(not os.path.exists(FRVSRModel+".data-00000-of-00001")):
-        # Download our pre-trained FRVSR model
-        print("pre-trained FRVSR model not found, downloading")
-        cmd0 = "wget http://ge.in.tum.de/download/2019-TecoGAN/FRVSR_Ours.zip -O model/ofrvsr.zip;"
-        cmd0 += "unzip model/ofrvsr.zip -d model; rm model/ofrvsr.zip"
-        subprocess.call(cmd0, shell=True)
     
-    TrainingDataPath =  "/home/carullo/Data/TecoGAN/Dinomite/v005/training" #"/mnt/netdisk/video_data/" 
+    TrainingDataDir = '~/Data/TecoGAN/' #TODO               <<<<<< Change this according to your training data
+    TrainingData =  "Dinomite/v005/training" #TODO          <<<<<< Change this according to your training data
+    TrainingDataPath = os.path.join(TrainingDataDir, TrainingData)
     
     '''Prepare Training Folder'''
     # path appendix, manually define it, or use the current datetime, now_str = "mm-dd-hh"
@@ -210,10 +203,10 @@ elif( runcase == 3 ): # Train TecoGAN
     cmd1 += [
         "--input_video_dir", TrainingDataPath, 
         "--input_video_pre", "scene",
-        "--str_dir", "2000",
-        "--end_dir", "2011",
-        "--end_dir_val", "2013",
-        "--max_frm", "116",
+        "--str_dir", "2000", #TODO              <<<<<< Change this according to your training data
+        "--end_dir", "2011", #TODO              <<<<<< Change this according to your training data
+        "--end_dir_val", "2013", #TODO          <<<<<< Change this according to your training data
+        "--max_frm", "116", #TODO               <<<<<< Change this according to your training data
         # -- cpu memory for data loading --
         "--queue_thread", "10",# Cpu threads for the data. >4 to speedup the training
         "--name_video_queue_capacity", "1024",
@@ -230,13 +223,32 @@ elif( runcase == 3 ): # Train TecoGAN
         whether to load the whole graph icluding ADAM training averages/momentums/ and so on
         or just load existing pre-trained weights.
     '''
-    cmd1 += [ # based on a pre-trained FRVSR model. Here we want to train a new adversarial training
+
+    '''
+    Use our pre-trained FRVSR model. If you want to train one, try runcase 4, and update this path by:
+    FRVSRModel = "ex_FRVSRmm-dd-hh/model-500000"
+    '''
+    FRVSRModel = "model/ourFRVSR"
+    if(not os.path.exists(FRVSRModel+".data-00000-of-00001")):
+        # Download our pre-trained FRVSR model
+        print("pre-trained FRVSR model not found, downloading")
+        cmd0 = "wget http://ge.in.tum.de/download/2019-TecoGAN/FRVSR_Ours.zip -O model/ofrvsr.zip;"
+        cmd0 += "unzip model/ofrvsr.zip -d model; rm model/ofrvsr.zip"
+        subprocess.call(cmd0, shell=True)
+
+    ##<< NEW TRAINING FROM FRVSR PRETRAINING BEGIN >>
+    # based on a pre-trained FRVSR model. Here we want to train a new adversarial training
+    # comment this out if you want to continue training a pretrained TecoGAN model and look at the next code block(<< CONTINUE TRAINING OF TECOGAN MODEL >>)
+    cmd1 += [ 
         "--pre_trained_model", # True
         "--checkpoint", FRVSRModel,
     ]
+    ##<< END NEW TRAINING FROM FRVSR PRETRAINING>>
     
-    # the following can be used to train TecoGAN continuously
-    #old_model = 'ex_TecoGAN04-22-15/model-286566' 
+    ##<< CONTINUE TRAINING OF TECOGAN MODEL >>
+    # the following can be used to train TecoGAN continuously 
+    old_model = 'ex_TecoGANdd-hh-mm/model-xxxxxx' # (only necessary when uncommenting next few lines)
+    # uncomment the next four lines if you want to continue training of an already trained TecoGAN model
     #cmd1 += [ # Here we want to train continuously
     #     "--nopre_trained_model", # False
     #     "--checkpoint", old_model,
@@ -303,21 +315,24 @@ elif( runcase == 4 ): # Train FRVSR, loss = l2 warp + l2 content
         "--nopingpang",
     ]
     '''Video Training data... Same as runcase 3...'''
-    TrainingDataPath = "/home/carullo/Data/TecoGAN/Dinomite/v005/training"  #"/home/carullo/Data/TecoGAN/Test/"
+    TrainingDataDir = '~/Data/TecoGAN/' #TODO               <<<<<< Change this according to your training data
+    TrainingData =  "Dinomite/v005/training" #TODO          <<<<<< Change this according to your training data
+    TrainingDataPath = os.path.join(TrainingDataDir, TrainingData)
     cmd1 += [
         "--input_video_dir", TrainingDataPath, 
         "--input_video_pre", "scene",
-        "--str_dir", "2000",
-        "--end_dir", "2011",
-        "--end_dir_val", "2013",
-        "--max_frm", "116",
+        "--str_dir", "2000", #TODO          <<<<<< Change this according to your training data
+        "--end_dir", "2011", #TODO          <<<<<< Change this according to your training data
+        "--end_dir_val", "2013", #TODO      <<<<<< Change this according to your training data
+        "--max_frm", "116", #TODO           <<<<<< Change this according to your training data
         # -- cpu memory for data loading --
         "--queue_thread", "10",# Cpu threads for the data. >4 to speedup the training
         "--name_video_queue_capacity", "1024",
         "--video_queue_capacity", "1024",
     ]
     
-    #FRVSRModel = "ex_FRVSR02-18-14/model-136200"
+    FRVSRModel = "ex_FRVSRdd-hh-mm/model-xxxxxx" # change this to the model you want to continue training (only necessary when uncommenting next few lines)
+    # uncomment the following four lines if you want to continue from a previoues FRVSR training
     #cmd1 += [ # based on a pre-trained FRVSR model. Here we want to train a new adversarial training
     #    "--pre_trained_model", # True
     #    "--checkpoint", FRVSRModel,
