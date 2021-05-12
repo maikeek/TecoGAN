@@ -33,7 +33,7 @@ def inference_data_loader(FLAGS):
         if downSP:
             icol_blur = cv.GaussianBlur( im, (0,0), sigmaX = 1.5)
             im = icol_blur[::4,::4,::]
-        if name.endswith(".jpeg") or name.endswith(".jpg") or 'calendar' in name:
+        if name.endswith(".jpeg") or name.endswith(".jpg") or any(substring in name for substring in ['calendar', 'bridge', 'city', 'face', 'foliage', 'room', 'walk']):
             im = im / 255.0
         else:
             im = im / 65535.0 #np.max(im)
