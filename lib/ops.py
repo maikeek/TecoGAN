@@ -13,16 +13,12 @@ from tensorflow.python.distribute.summary_op_util import skip_summary
 
 def preprocess(image):
     with tf.name_scope("preprocess"):
-        # [0, 1] => [-1, 1]
         return tf.identity(image)
-        #return image * 2 - 1
 
 
 def deprocess(image):
     with tf.name_scope("deprocess"):
-        # [-1, 1] => [0, 1]
         return tf.identity(image)
-        #return (image + 1) / 2
 
 
 def preprocessLR(image):
