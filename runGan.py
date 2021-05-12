@@ -156,7 +156,7 @@ elif( runcase == 3 ): # Train TecoGAN
         cmd0 += ";tar -xvf " + os.path.join(VGGPath,"vgg19.tar.gz") + " -C " + VGGPath + "; rm "+ os.path.join(VGGPath, "vgg19.tar.gz")
         subprocess.call(cmd0, shell=True)
     
-    TrainingDataDir = '~/Data/TecoGAN/' #TODO               <<<<<< Change this according to your training data
+    TrainingDataDir = os.path.expanduser('~/Data/TecoGAN') #TODO               <<<<<< Change this according to your training data
     TrainingData =  "Dinomite/v005/training" #TODO          <<<<<< Change this according to your training data
     TrainingDataPath = os.path.join(TrainingDataDir, TrainingData)
     
@@ -315,8 +315,8 @@ elif( runcase == 4 ): # Train FRVSR, loss = l2 warp + l2 content
         "--nopingpang",
     ]
     '''Video Training data... Same as runcase 3...'''
-    TrainingDataDir = '~/Data/TecoGAN/' #TODO               <<<<<< Change this according to your training data
-    TrainingData =  "Dinomite/v005/training" #TODO          <<<<<< Change this according to your training data
+    TrainingDataDir = os.path.expanduser('~/Data/TecoGAN') #TODO   <<<<<< Change this according to your training data
+    TrainingData =  "Dinomite/v005/training" #TODO                 <<<<<< Change this according to your training data
     TrainingDataPath = os.path.join(TrainingDataDir, TrainingData)
     cmd1 += [
         "--input_video_dir", TrainingDataPath, 
