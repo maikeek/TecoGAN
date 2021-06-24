@@ -1,3 +1,15 @@
+# KI-Lab Animation & VFX
+
+This is a fork of the official TecoGAN repository, containing some minor changes to adapt it for production use in animation/vfx.
+At the current time it's only a rough WIP and there's much to be done...
+
+For more infos about the project:
+https://animationsinstitut.de/de/forschung/projects/ki-lab-animation-vfx
+https://ai.hdm-stuttgart.de/
+https://www.youtube.com/watch?v=Bz7qxNUxnW8 
+
+------------vvv----------------------Content Original Repository---------------------vvv-------------------
+
 # TecoGAN
 This repository contains source code and materials for the TecoGAN project, i.e. code for a TEmporally COherent GAN for video super-resolution.
 _Authors: Mengyu Chu, You Xie, Laura Leal-Taixe, Nils Thuerey. Technical University of Munich._
