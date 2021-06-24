@@ -8,7 +8,7 @@ https://animationsinstitut.de/de/forschung/projects/ki-lab-animation-vfx
 https://ai.hdm-stuttgart.de/
 https://www.youtube.com/watch?v=Bz7qxNUxnW8 
 
-------------vvv----------------------Content Original Repository---------------------vvv-------------------
+-----------------
 
 # TecoGAN
 This repository contains source code and materials for the TecoGAN project, i.e. code for a TEmporally COherent GAN for video super-resolution.
