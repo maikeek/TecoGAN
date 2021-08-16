@@ -5,6 +5,25 @@ import cv2 as cv
 import collections, os, math
 import numpy as np
 from scipy import signal
+from scipy.interpolate import interp1d
+
+
+def translate(value, leftMin, leftMax, rightMin, rightMax):
+    value = tf.cast(value,dtype=tf.float32)
+    leftMin = tf.cast(leftMin,dtype=tf.float32)
+    leftMax = tf.cast(leftMax,dtype=tf.float32)
+    rightMin = tf.cast(rightMin,dtype=tf.float32)
+    rightMax = tf.cast(rightMax,dtype=tf.float32)
+    # Figure out how 'wide' each range is
+    leftSpan = tf.cast(leftMax - leftMin,dtype=tf.float32)
+    rightSpan = tf.cast(rightMax - rightMin,dtype=tf.float32)
+
+    # Convert the left range into a 0-1 range (float)
+    valueScaled = tf.cast(value - leftMin,dtype=tf.float32) / leftSpan
+
+    # Convert the 0-1 range into a value in the right range.
+    return rightMin + (valueScaled * rightSpan)
+
 
 # The inference data loader. 
 # should be a png sequence
@@ -64,13 +83,13 @@ def loadHR_batch(FLAGS, tar_size):
         image_set_lists = []
         with tf.variable_scope('load_frame'):
             for dir_i in range(FLAGS.str_dir, FLAGS.end_dir+1):
-                inputDir = os.path.join( FLAGS.input_video_dir, '%s_%d' %(FLAGS.input_video_pre, dir_i) )
+                inputDir = os.path.join( FLAGS.input_video_dir, '%s_%04d' %(FLAGS.input_video_pre, dir_i) )
                 if (os.path.exists(inputDir)): # the following names are hard coded: col_high_
-                    if not os.path.exists(os.path.join(inputDir ,'col_high_%d.png' % FLAGS.max_frm) ):
+                    if not os.path.exists(os.path.join(inputDir ,'col_high_%04d.png' % FLAGS.max_frm) ):
                         print("Skip %s, since foler doesn't contain enough frames!" % inputDir)
                         continue
                         
-                    image_list = [ os.path.join(inputDir ,'col_high_%d.png' % frame_i ) 
+                    image_list = [ os.path.join(inputDir ,'col_high_%04d.png' % frame_i ) 
                                     for frame_i in range(FLAGS.max_frm + 1 )]
                     image_set_lists.append(image_list) 
             tensor_set_lists = tf.convert_to_tensor(image_set_lists, dtype=tf.string)
@@ -165,7 +184,7 @@ def loadHR_batch(FLAGS, tar_size):
         batch_list = tf.train.shuffle_batch(output_names + target_images, enqueue_many=True,\
                         batch_size=int(FLAGS.batch_size), capacity=FLAGS.video_queue_capacity+FLAGS.video_queue_batch*sequence_length,
                         min_after_dequeue=FLAGS.video_queue_capacity, num_threads=FLAGS.queue_thread, seed = FLAGS.rand_seed)
-        
+
     return batch_list, num_image_list_HR_t_cur # a k_w_border margin is in there for gaussian blur
     
 # load hi-res data from disk
@@ -184,19 +203,19 @@ def loadHR(FLAGS, tar_size):
         image_list_LR_r = [[] for _ in range( FLAGS.RNN_N )] # all empty lists
         
         for dir_i in range(FLAGS.str_dir, FLAGS.end_dir+1):
-            inputDir = os.path.join( FLAGS.input_video_dir, '%s_%d' %(FLAGS.input_video_pre, dir_i) )
+            inputDir = os.path.join( FLAGS.input_video_dir, '%s_%04d' %(FLAGS.input_video_pre, dir_i) )
             inputDir_LR = os.path.join(inputDir, "LR")  # os.path.join(inputDir, "LR")
             if (os.path.exists(inputDir)): # the following names are hard coded
-                if not os.path.exists(os.path.join(inputDir ,'col_high_%d.png' % FLAGS.max_frm) ):
+                if not os.path.exists(os.path.join(inputDir ,'col_high_%04d.png' % FLAGS.max_frm) ):
                     print("Skip %s, since foler doesn't contain enough frames!" % inputDir)
                     continue
-                if not os.path.exists(os.path.join(inputDir_LR ,'col_low_%d.png' % FLAGS.max_frm) ):
+                if not os.path.exists(os.path.join(inputDir_LR ,'col_low_%04d.png' % FLAGS.max_frm) ):
                     print("Skip %s, since foler doesn't contain enough frames!" % inputDir_LR)
                     continue
                 for fi in range( FLAGS.RNN_N ):
-                    image_list_HR_r[fi] += [ os.path.join(inputDir ,'col_high_%d.png' % frame_i ) 
+                    image_list_HR_r[fi] += [ os.path.join(inputDir ,'col_high_%04d.png' % frame_i ) 
                                         for frame_i in range(fi, FLAGS.max_frm - FLAGS.RNN_N + fi + 1 )]
-                    image_list_LR_r[fi] += [ os.path.join(inputDir_LR ,'col_low_%d.png' % frame_i ) 
+                    image_list_LR_r[fi] += [ os.path.join(inputDir_LR ,'col_low_%04d.png' % frame_i ) 
                                         for frame_i in range(fi, FLAGS.max_frm - FLAGS.RNN_N + fi + 1 )]
         
         num_image_list_HR_t_cur = len(image_list_HR_r[0])
@@ -217,7 +236,7 @@ def loadHR(FLAGS, tar_size):
             output_LR = tf.train.slice_input_producer(image_list_LR_r, shuffle=False,\
                 capacity=int(FLAGS.name_video_queue_capacity) )
             output_names_LR = output_LR
-            
+
             data_list_HR_r = []# high res rgb, in range 0-1, shape any
             data_list_LR_r = []# low res rgb, in range 0-1, shape any
                 
@@ -227,9 +246,13 @@ def loadHR(FLAGS, tar_size):
                 offset_xy_LR = offset_xy // 4
                 # [FLAGS.RNN_N , 2], shifts
                 pos_xy = tf.cumsum(offset_xy, axis=0, exclusive=True) # relative positions
+                pos_xy_LR = tf.cumsum(offset_xy_LR, axis=0, exclusive=True) # relative positions
                 min_pos = tf.reduce_min( pos_xy, axis=0 )
+                min_pos_LR = tf.reduce_min( pos_xy_LR, axis=0 )
                 range_pos = tf.reduce_max( pos_xy, axis=0 ) - min_pos # [ shrink x, shrink y ]
+                range_pos_LR = tf.reduce_max( pos_xy_LR, axis=0 ) - min_pos_LR # [ shrink x, shrink y ]
                 lefttop_pos = pos_xy - min_pos # crop point
+                lefttop_pos_LR = pos_xy_LR - min_pos_LR # crop point
                 moving_decision = tf.random_uniform([], 0, 1, dtype=tf.float32)
                 
             for fi in range( FLAGS.RNN_N ):
@@ -243,11 +266,11 @@ def loadHR(FLAGS, tar_size):
                         target_size_LR = tf.shape(LR_data_0)
                         
                     HR_data_1 = tf.image.crop_to_bounding_box(HR_data_0, 
-                        lefttop_pos[fi][1], lefttop_pos[fi][0], 
+                        lefttop_pos[fi][1], lefttop_pos[fi][0],
                         target_size[0] - range_pos[1], target_size[1] - range_pos[0])
                     LR_data_1 = tf.image.crop_to_bounding_box(LR_data_0, 
-                        lefttop_pos[fi][1] // 4, lefttop_pos[fi][0] // 4, 
-                        (target_size[0] - range_pos[1]) // 4, (target_size[1] - range_pos[0]) // 4)
+                        lefttop_pos_LR[fi][1], lefttop_pos_LR[fi][0], 
+                        (target_size_LR[0] - range_pos_LR[1]), (target_size_LR[1] - range_pos_LR[0]))
                     HR_data = tf.cond(moving_decision < 0.7, lambda: tf.identity(HR_data), lambda: tf.identity(HR_data_1))
                     LR_data = tf.cond(moving_decision < 0.7, lambda: tf.identity(LR_data), lambda: tf.identity(LR_data_1))
                     output_names[fi] = tf.cond(moving_decision < 0.7, lambda: tf.identity(output_names[fi]), lambda: tf.identity(output_names[0]))
@@ -265,21 +288,28 @@ def loadHR(FLAGS, tar_size):
                 if (FLAGS.random_crop is True) and FLAGS.mode == 'train':
                     print('[Config] Use random crop')
                     target_size = tf.shape(target_images[0])
-                    input_size = tf.shape(input_images[0])
-                    
-                    offset_w = tf.cast(tf.floor(tf.random_uniform([], 0, \
-                        tf.cast(target_size[1], tf.float32) - tar_size )),dtype=tf.int32)
-                    offset_h = tf.cast(tf.floor(tf.random_uniform([], 0, \
-                        tf.cast(target_size[0], tf.float32) - tar_size )),dtype=tf.int32)
-                    offset_w_LR = offset_w // 4
-                    offset_h_LR = offset_h // 4
-                    
+                    offset_w = tf.cast(tf.floor(tf.random_uniform([], 0, tf.cast(target_size[1], tf.float32) - (tar_size) - 1  )),dtype=tf.int32)
+                    offset_h = tf.cast(tf.floor(tf.random_uniform([], 0, tf.cast(target_size[0], tf.float32) - (tar_size) - 1 )),dtype=tf.int32)
+
+                    tar_size_s = tar_size // 4
                     for frame_t in range(FLAGS.RNN_N):
+                        input_size = tf.shape(input_images[frame_t])
+                        input_height = input_size[0]
+                        input_width = input_size[1]
+                        offset_w_s = tf.cast(tf.floor(translate(offset_w, 0, target_size[1], 0, input_width)),dtype=tf.int32)
+                        tf.cond(
+                            offset_w_s > (input_width-tar_size_s), true_fn=lambda: tf.print(f'Too big offset {offset_w_s} setting to max value {(input_width-tar_size_s)}'), false_fn=lambda: True
+                        )
+                        offset_w_s = tf.cond(offset_w_s > (input_width-tar_size_s), true_fn=lambda: input_width-tar_size_s, false_fn=lambda: offset_w_s)
+                        offset_h_s = tf.cast(tf.floor(translate(offset_h, 0, target_size[0], 0, input_height)),dtype=tf.int32)
+                        tf.cond(
+                            offset_h_s > (input_height-tar_size_s), true_fn=lambda: tf.print(f'Too big offset {offset_h_s} setting to max value {(input_height-tar_size_s)}'), false_fn=lambda: True
+                        )
+                        offset_h_s = tf.cond(offset_h_s > (input_height-tar_size_s), true_fn=lambda: input_height-tar_size_s, false_fn=lambda: offset_h_s)
                         target_images[frame_t] = tf.image.crop_to_bounding_box(target_images[frame_t], 
                             offset_h, offset_w, tar_size, tar_size)
                         input_images[frame_t] = tf.image.crop_to_bounding_box(input_images[frame_t], 
-                            offset_h_LR, offset_w_LR, tar_size // 4, tar_size // 4)  
-                        
+                           offset_h_s, offset_w_s, tar_size_s, tar_size_s)  
                 else:
                     raise Exception('Not implemented')
             
@@ -388,4 +418,3 @@ def frvsr_gpu_data_loader(FLAGS, useValData_ph): # useValData_ph, tf bool placeh
         image_count=num_image_list_HR_t_cur,
         steps_per_epoch=steps_per_epoch
     )
-    
